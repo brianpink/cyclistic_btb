@@ -1,0 +1,229 @@
+---
+title: "Cyclistic Data Study - By The Book"
+author: "Brian Pink"
+date: '`r Sys.Date()`'
+output: html_document
+---
+
+Cyclistic is a fictional bike share company in Chicago. We offer two types of rider styles; people who use the bikes in a pay-per-use scenario: "casual" and those who purchase our membership option: "member". The company has determined that membership is the more profitable option of the two groups, and has tasked me with examing our usage data to determine how these riders differ so we might better inform them on how their needs will be better served by our membership option.
+
+To analyze this data, I've chosen R & Rstudio as my tools of choice due to the large size of the log files, and my comfort level with quickly iterating through analysis in code.
+
+I've started with loading the tools of R manipulation in the tidyverse as well as additional date functionality in lubridate.
+
+```{r}
+library(tidyverse)
+library(lubridate)  
+```
+
+All data was sourced from our internal log files, and for the time period I'm assessing, our data is in a consistent format and stored in .csv files separated by month.
+
+Let's pull in all the data.
+
+```{r}
+m05_2021 <- read_csv("data/202105-divvy-tripdata.csv")
+m06_2021 <- read_csv("data/202106-divvy-tripdata.csv")
+m07_2021 <- read_csv("data/202107-divvy-tripdata.csv")
+m08_2021 <- read_csv("data/202108-divvy-tripdata.csv")
+m09_2021 <- read_csv("data/202109-divvy-tripdata.csv")
+m10_2021 <- read_csv("data/202110-divvy-tripdata.csv")
+m11_2021 <- read_csv("data/202111-divvy-tripdata.csv")
+m12_2021 <- read_csv("data/202112-divvy-tripdata.csv")
+m01_2022 <- read_csv("data/202201-divvy-tripdata.csv")
+m02_2022 <- read_csv("data/202202-divvy-tripdata.csv")
+m03_2022 <- read_csv("data/202203-divvy-tripdata.csv")
+m04_2022 <- read_csv("data/202204-divvy-tripdata.csv")
+```
+
+Make sure all column names are in alignment. #NOTE this should not be necessary with the current dataset, but just to be sure.
+
+```{r}
+colnames(m04_2022)
+colnames(m03_2022)
+colnames(m02_2022)
+colnames(m01_2022)
+colnames(m12_2021)
+colnames(m11_2021)
+colnames(m10_2021)
+colnames(m09_2021)
+colnames(m08_2021)
+colnames(m07_2021)
+colnames(m06_2021)
+colnames(m05_2021)
+```
+
+Make sure data is stackable. #AGAIN, SEE NOTE ABOVE
+
+```{r}
+m04_2022 <-  mutate(m04_2022, ride_id = as.character(ride_id))
+m03_2022 <-  mutate(m03_2022, ride_id = as.character(ride_id))
+m02_2022 <-  mutate(m02_2022, ride_id = as.character(ride_id))
+m01_2022 <-  mutate(m01_2022, ride_id = as.character(ride_id))
+m12_2021 <-  mutate(m12_2021, ride_id = as.character(ride_id))
+m11_2021 <-  mutate(m11_2021, ride_id = as.character(ride_id))
+m10_2021 <-  mutate(m10_2021, ride_id = as.character(ride_id))
+m09_2021 <-  mutate(m09_2021, ride_id = as.character(ride_id))
+m08_2021 <-  mutate(m08_2021, ride_id = as.character(ride_id))
+m07_2021 <-  mutate(m07_2021, ride_id = as.character(ride_id))
+m06_2021 <-  mutate(m06_2021, ride_id = as.character(ride_id))
+m05_2021 <-  mutate(m05_2021, ride_id = as.character(ride_id))
+```
+
+Now that things look consistent, we'll merge all the data into one big data frame.
+
+```{r}
+all_trips <- bind_rows(m04_2022, m03_2022,m02_2022,m01_2022,m12_2021,m11_2021,m10_2021,m09_2021,m08_2021,m07_2021,m06_2021,m05_2021)
+```
+
+Inspect the first 6 rows of the new table that has been created.
+
+```{r}
+head(all_trips)
+```
+
+Now let's examine the structure, again to make sure we've got the data we expect to see in each column.
+
+```{r}
+str(all_trips)  #See list of columns and data types (numeric, character, etc)
+```
+
+Now I'm going to start looking for things of interest to clean.
+
+```{r}
+summary(all_trips)  #Statistical summary of data.
+```
+
+Are there any outliers we want to clean out? I'm going to check start_station_name first. **note** I am sticking this into a variable to be able to examine in RStudio, but not show the entirety of the list here.
+
+```{r}
+all_the_stations <- unique(all_trips$start_station_name)
+```
+
+Based on our business task and the relevant information, I'm going to start filtering out some of the data. It's not likely that the "DIVVY CASSETTE REPAIR MOBILE STATION" has much to do with our question, for example.
+
+```{r}
+all_trips <- all_trips %>%
+  filter(start_station_name != "NA", start_station_name != "DIVVY CASSETTE REPAIR MOBILE STATION")
+```
+
+
+To make future date analysis a little more in depth, we'll add columns for the date information.
+
+```{r}
+all_trips$date <- as.Date(all_trips$started_at) #The default format is yyyy-mm-dd
+all_trips$month <- format(as.Date(all_trips$date), "%m")
+all_trips$day <- format(as.Date(all_trips$date), "%d")
+all_trips$year <- format(as.Date(all_trips$date), "%Y")
+all_trips$day_of_week <- format(as.Date(all_trips$date), "%A")
+```
+
+We know the start and end times for each ride, so we'll add ride length to all rides (in seconds).
+
+```{r}
+all_trips$ride_length <- difftime(all_trips$ended_at, all_trips$started_at)
+```
+
+Make sure "ride_length" is numeric so we can run calculations on the data.
+
+```{r}
+all_trips$ride_length <- as.numeric(as.character(all_trips$ride_length))
+```
+
+Remove negative length trips, also trips of less than 180 seconds **NOTE** this is arbitrary and should be examined further. What's the appropriate length for mistaken rides to be trimmed at? Anything less than 3 minutes seems like either a mistake or something that isn't going to play heavily into our generalizations regarding use patterns.
+
+```{r}
+all_trips_v2 <- all_trips[!(all_trips$ride_length<=180),]
+```
+
+Now we'll look at the summary of the ride length data.
+
+```{r}
+summary(all_trips_v2$ride_length)
+```
+
+That's for all users, but let's compare members and casual users.
+
+```{r}
+aggregate(all_trips_v2$ride_length ~ all_trips_v2$member_casual, FUN = mean)
+aggregate(all_trips_v2$ride_length ~ all_trips_v2$member_casual, FUN = median)
+```
+
+Already there's a big difference between casual and member, the mean ride length is over twice as long!
+
+Let's break out the average ride time by each day for members vs casual users.
+
+```{r}
+aggregate(all_trips_v2$ride_length ~ all_trips_v2$member_casual + all_trips_v2$day_of_week, FUN = mean)
+```
+
+Reorder the frame so that the days of the week are in order.
+
+```{r}
+all_trips_v2$day_of_week <- ordered(all_trips_v2$day_of_week, levels=c("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"))
+```
+
+Now, let's view the sorted data.
+
+```{r}
+aggregate(all_trips_v2$ride_length ~ all_trips_v2$member_casual + all_trips_v2$day_of_week, FUN = mean)
+```
+
+I'm wondering what the relationships are between users, what bikes they ride, what days they ride, what months they ride, how far they ride and the ride duration. I'm going to start by pulling that data out the data for some analysis.
+
+```{r}
+ride_data <- all_trips_v2 %>% 
+  mutate(weekday = wday(started_at, label = TRUE)) %>%
+  group_by(member_casual, weekday, month, rideable_type) %>%   
+  filter(rideable_type != "docked_bike") %>%
+  summarise(number_of_rides = n()							 
+  ,average_duration = mean(ride_length)/60) %>% 		        
+  arrange(member_casual, weekday)					       
+```
+
+Now, let's start building some visualizations. 
+
+```{r}
+ggplot(data = all_trips_v2, aes(x = started_at)) +
+    geom_histogram()
+```
+
+
+This chart shows us the number of rides for each month, by member type.
+
+```{r}
+ggplot() +
+  geom_col(data = ride_data, position = "dodge", aes(x = month, y = number_of_rides, fill = member_casual))
+```
+
+Interesting. Clearly everyone is using the bikes more in the summer months, but casual riders drop off much more quickly. Let's look at duration.
+
+```{r}
+ggplot() +
+  geom_col(data = ride_data, position = "dodge", aes(x = month, y = average_duration, fill = member_casual))
+```
+
+Well, we knew that casual riders generally took longer rides, but this makes it clear that it's not just during the summer.
+
+Let's consider days of the week and see how that impacts our results.
+
+```{r}
+ggplot() +
+  geom_col(data = ride_data, position="dodge", aes(x = weekday, y = number_of_rides, fill = member_casual))
+```
+
+We've learned some interesting things, but the common theme across these visualizations is clear: riders who are members have incorporated the service into their daily life on a more consistent basis.
+
+I'll output a file for further visualization.
+
+```{r}
+counts <- aggregate(all_trips_v2$ride_length ~ all_trips_v2$member_casual + all_trips_v2$day_of_week, FUN = mean)
+write.csv(counts, file = 'avg_ride_length.csv')
+
+```
+
+
+
+
+
+
+

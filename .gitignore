@@ -1,0 +1,6 @@
+.DS_Store
+.vscode/
+data/
+private_.txt
+.R*
+.Rproj.user
